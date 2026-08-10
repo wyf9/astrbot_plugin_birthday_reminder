@@ -1,0 +1,30 @@
+# prek (pre-commit 兼容) 钩子配置
+# 提交前按顺序执行：ty check -> ruff check(--fix) -> ruff format -> uv export
+repos:
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check
+        entry: ty check
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: ruff-check
+        name: ruff check
+        entry: ruff check --fix
+        language: system
+        types: [python]
+
+      - id: ruff-format
+        name: ruff format
+        entry: ruff format
+        language: system
+        types: [python]
+
+      - id: uv-export-requirements
+        name: uv export requirements.txt
+        entry: uv export --no-hashes --no-dev --no-emit-project -o requirements.txt
+        language: system
+        pass_filenames: false
+        always_run: true

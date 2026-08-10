@@ -1,0 +1,30 @@
+[project]
+name = "astrbot-plugin-birthday-reminder"
+version = "1.0.0"
+description = "记录群成员生日并在生日当天自动发送祝福，支持手动添加 / 从群公告抓取。"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "apscheduler>=3.10",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14",
+    "ty>=0.0.1",
+]
+
+[tool.uv]
+# 该项目是 AstrBot 插件，不作为可安装包构建
+package = false
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.ty.rules]
+# astrbot / apscheduler 等依赖由 AstrBot 宿主运行时提供，静态检查时忽略未解析导入
+unresolved-import = "ignore"

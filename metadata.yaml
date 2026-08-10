@@ -1,0 +1,9 @@
+name: astrbot_plugin_birthday_reminder # 插件唯一识别名
+display_name: 生日提醒 # 展示名
+desc: 记录群成员生日并在生日当天自动发送祝福，支持手动添加 / 从群公告抓取。 # 简短描述
+short_desc: 群成员生日记录与自动祝福提醒。
+version: v1.0.0 # 插件版本号
+author: wyf9 # 作者
+repo: https://github.com/wyf9/astrbot_plugin_birthday_reminder # 仓库地址
+support_platforms:
+  - aiocqhttp

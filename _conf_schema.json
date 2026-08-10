@@ -1,0 +1,102 @@
+{
+  "record_mode": {
+    "description": "记录与群的关联模式",
+    "type": "string",
+    "options": ["per_group", "global"],
+    "default": "per_group",
+    "hint": "per_group: 每条记录归属于某个群，/birthday list 默认只显示本群记录；global: 记录全局唯一(按 QQ 号)，/birthday list 在群内时按本群成员过滤显示。两种模式的数据分开存储，切换模式不会互相影响。"
+  },
+  "list_count": {
+    "description": "list 默认显示的即将生日人数",
+    "type": "int",
+    "default": 10,
+    "hint": "按距离下一次生日由近到远排序，取前 N 个。"
+  },
+  "reminder_template": {
+    "description": "生日提醒消息模板",
+    "type": "text",
+    "default": "今天是 {at} 的生日，让我们祝 {nick} 生日快乐！！！🎂🥳",
+    "hint": "可用占位符：{uin} QQ号、{nick} 昵称、{at} @该用户、{age} 年龄(出生年未知时为 ?)。"
+  },
+  "check_time": {
+    "description": "每日生日检测时间 (HH:MM，24 小时制)",
+    "type": "string",
+    "default": "00:00",
+    "hint": "每天在该时间执行一次生日检测；也可用 /birthday trigger 手动触发。"
+  },
+  "feb29_mode": {
+    "description": "2 月 29 日生日在平年的处理方式",
+    "type": "string",
+    "options": ["feb28", "mar1", "none"],
+    "default": "feb28",
+    "hint": "feb28: 平年顺延到 2 月 28 日提醒；mar1: 平年顺延到 3 月 1 日提醒；none: 不顺延，仅闰年 2 月 29 日当天提醒(四年一次)。"
+  },
+  "crawl": {
+    "description": "从群公告抓取的相关配置",
+    "type": "object",
+    "items": {
+      "group_whitelist": {
+        "description": "抓取来源群号白名单",
+        "type": "list",
+        "default": [],
+        "hint": "只会从这些群抓取公告。填写 QQ 群号。"
+      },
+      "trigger_word": {
+        "description": "公告触发词",
+        "type": "string",
+        "default": "生日",
+        "hint": "只有公告内容包含此触发词才会被解析。留空表示解析所有公告。"
+      },
+      "parse_mode": {
+        "description": "公告内容解析方式",
+        "type": "string",
+        "options": ["csv", "regex"],
+        "default": "csv",
+        "hint": "csv: 每行 QQ号,昵称,年,月,日；regex: 使用下方正则逐行/全局匹配。"
+      },
+      "regex": {
+        "description": "regex 解析表达式(需包含命名组 uin,nick,year,month,day)",
+        "type": "text",
+        "default": "(?P<uin>\\d+)\\s*,\\s*(?P<nick>[^,\\n]+)\\s*,\\s*(?P<year>\\d+)\\s*,\\s*(?P<month>\\d+)\\s*,\\s*(?P<day>\\d+)",
+        "hint": "仅当 parse_mode 为 regex 时生效，使用 re.finditer 全局匹配。year 组可选(缺省视为未知)。"
+      },
+      "trigger_mode": {
+        "description": "自动抓取触发方式",
+        "type": "string",
+        "options": ["off", "poll", "event", "both"],
+        "default": "both",
+        "hint": "off: 仅手动 /birthday crawl；poll: 定时轮询公告；event: 监听协议端群公告/通知事件实时触发；both: 两者同时(推荐，去重不会重复处理)。"
+      },
+      "poll_interval_minutes": {
+        "description": "轮询间隔(分钟)",
+        "type": "int",
+        "default": 30,
+        "hint": "trigger_mode 为 poll 或 both 时生效。"
+      }
+    }
+  },
+  "at_all": {
+    "description": "生日提醒 @全体成员 配置",
+    "type": "object",
+    "items": {
+      "enable": {
+        "description": "启用生日提醒时 @全体成员",
+        "type": "bool",
+        "default": false,
+        "hint": "仅在 bot 于目标群为管理员或群主时才会真正生效。"
+      },
+      "group_whitelist": {
+        "description": "允许 @全体 的群白名单",
+        "type": "list",
+        "default": [],
+        "hint": "留空表示不限制群。填写 QQ 群号。"
+      },
+      "user_whitelist": {
+        "description": "允许触发 @全体 的用户(生日者)白名单",
+        "type": "list",
+        "default": [],
+        "hint": "留空表示不限制用户。填写 QQ 号。"
+      }
+    }
+  }
+}
