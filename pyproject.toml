@@ -3,6 +3,8 @@ name = "astrbot-plugin-birthday-reminder"
 version = "1.0.0"
 description = "记录群成员生日并在生日当天自动发送祝福，支持手动添加 / 从群公告抓取。"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "apscheduler>=3.10",
