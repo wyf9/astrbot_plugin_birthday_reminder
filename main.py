@@ -335,14 +335,22 @@ class BirthdayReminder(Star):
         """抓取所有白名单群公告。返回 (新增, 跳过, 处理群数)。"""
         crawl = self._crawl_cfg()
         whitelist = crawl["group_whitelist"]
+        logger.debug(
+            f"[birthday] 开始抓取：group_whitelist={whitelist} "
+            f"trigger_word={crawl['trigger_word']!r} parse_mode={crawl['parse_mode']!r} "
+            f"trigger_mode={crawl['trigger_mode']!r}"
+        )
         if not whitelist:
+            logger.debug("[birthday] group_whitelist 为空，跳过抓取")
             return 0, 0, 0
         clients = self._get_aiocqhttp_clients()
+        logger.debug(f"[birthday] 可用 aiocqhttp client 数量={len(clients)}")
         if not clients:
             logger.warning("[birthday] 未找到 aiocqhttp 平台，无法抓取")
             return 0, 0, 0
         # 单 bot 假设：使用第一个可用 client
         platform_id, client = clients[0]
+        logger.debug(f"[birthday] 使用 platform_id={platform_id!r} 进行抓取")
 
         mode = self._mode()
         records = await self.store.get_records(mode)
@@ -373,8 +381,12 @@ class BirthdayReminder(Star):
         crawl: dict[str, Any],
     ) -> tuple[int, int, list[str]]:
         """抓取单个群。原地更新 records。返回 (新增, 跳过, 冲突信息)。"""
+        logger.debug(f"[birthday] === 抓取群 {group_id} 开始 ===")
         notices = await fetch_group_notices(client, group_id)
         processed = await self.store.get_processed(group_id)
+        logger.debug(
+            f"[birthday] 群 {group_id} 已处理过的公告 id 数量={len(processed)}: {sorted(processed)}"
+        )
         new_ids: list[str] = []
         added = skipped = 0
         conflicts: list[str] = []
@@ -383,11 +395,16 @@ class BirthdayReminder(Star):
         for notice in notices:
             nid = notice["notice_id"]
             if nid in processed:
+                logger.debug(f"[birthday] 群 {group_id} 公告 {nid} 已处理过，跳过")
                 continue
             new_ids.append(nid)
             text = notice["text"]
             if trigger_word and trigger_word not in text:
+                logger.debug(
+                    f"[birthday] 群 {group_id} 公告 {nid} 不含触发词 {trigger_word!r}，跳过解析"
+                )
                 continue
+            logger.debug(f"[birthday] 群 {group_id} 公告 {nid} 命中触发词，开始解析")
             entries, errors = parse_announcement(text, crawl["parse_mode"], crawl["regex"])
             for err in errors:
                 conflicts.append(f"[群{group_id}] {err}")
@@ -412,6 +429,10 @@ class BirthdayReminder(Star):
                 )
                 added += 1
         await self.store.add_processed(group_id, new_ids)
+        logger.debug(
+            f"[birthday] === 抓取群 {group_id} 结束：新增 {added}，跳过 {skipped}，"
+            f"新处理公告 {len(new_ids)} 条，冲突/错误 {len(conflicts)} 条 ==="
+        )
         return added, skipped, conflicts
 
     async def _run_birthday_check(self) -> int:
@@ -420,6 +441,11 @@ class BirthdayReminder(Star):
         records = await self.store.get_records(mode)
         today = datetime.date.today()
         birthdays = find_today_birthdays(records, today, self._feb29_mode())
+        logger.debug(
+            f"[birthday] 生日检测：mode={mode} 今天={today} 记录总数={len(records)} "
+            f"feb29_mode={self._feb29_mode()} 今日生日命中={len(birthdays)} "
+            f"-> {[(b.uin, b.nick, b.month, b.day) for b in birthdays]}"
+        )
         if not birthdays:
             return 0
         if mode == "per_group":

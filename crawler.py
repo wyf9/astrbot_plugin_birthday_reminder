@@ -12,6 +12,11 @@ from astrbot.api import logger
 from .models import ParsedEntry
 
 
+def _truncate(text: str, limit: int = 500) -> str:
+    text = text.replace("\n", "\\n")
+    return text if len(text) <= limit else text[:limit] + f"...(共 {len(text)} 字)"
+
+
 def parse_announcement(
     text: str, parse_mode: str, regex: str
 ) -> tuple[list[ParsedEntry], list[str]]:
@@ -20,9 +25,16 @@ def parse_announcement(
     Returns:
         (entries, errors)：成功解析的条目与错误信息列表。
     """
+    logger.debug(f"[birthday] 解析公告：parse_mode={parse_mode!r} 原文={_truncate(text)!r}")
     if parse_mode == "regex":
-        return _parse_regex(text, regex)
-    return _parse_csv(text)
+        entries, errors = _parse_regex(text, regex)
+    else:
+        entries, errors = _parse_csv(text)
+    logger.debug(
+        f"[birthday] 解析结果：命中 {len(entries)} 条，错误 {len(errors)} 条 -> "
+        f"entries={[(e.uin, e.nick, e.year, e.month, e.day) for e in entries]} errors={errors}"
+    )
+    return entries, errors
 
 
 def _to_int(value: str | None) -> int:
@@ -103,21 +115,38 @@ async def fetch_group_notices(client: Any, group_id: str) -> list[dict[str, Any]
     返回形如 [{"notice_id": str, "text": str}, ...]。
     兼容 Napcat / Lagrange 的 `_get_group_notice` 返回结构。
     """
+    logger.debug(f"[birthday] 调用协议端 _get_group_notice group_id={group_id}")
     try:
         ret = await client.api.call_action("_get_group_notice", group_id=int(group_id))
     except Exception as e:  # noqa: BLE001 - 网络/协议端错误不应导致插件崩溃
         logger.warning(f"[birthday] 获取群 {group_id} 公告失败: {e}")
         return []
 
+    logger.debug(
+        f"[birthday] 群 {group_id} 公告原始返回 type={type(ret).__name__} "
+        f"value={_truncate(repr(ret), 1000)}"
+    )
     notices = ret if isinstance(ret, list) else ret.get("data", []) if isinstance(ret, dict) else []
+    logger.debug(f"[birthday] 群 {group_id} 解析出 {len(notices or [])} 条公告条目")
     result: list[dict[str, Any]] = []
-    for item in notices or []:
+    for idx, item in enumerate(notices or []):
         if not isinstance(item, dict):
+            logger.debug(f"[birthday] 群 {group_id} 公告[{idx}] 非 dict，跳过: {item!r}")
             continue
         notice_id = str(item.get("notice_id") or item.get("id") or "")
         text = _extract_notice_text(item)
+        logger.debug(
+            f"[birthday] 群 {group_id} 公告[{idx}] keys={list(item.keys())} "
+            f"notice_id={notice_id!r} text={_truncate(text)!r}"
+        )
         if notice_id and text:
             result.append({"notice_id": notice_id, "text": text})
+        else:
+            logger.debug(
+                f"[birthday] 群 {group_id} 公告[{idx}] 缺少 notice_id 或 text，"
+                f"未纳入处理（若 text 为空说明字段结构未适配）"
+            )
+    logger.debug(f"[birthday] 群 {group_id} 最终纳入处理的公告 {len(result)} 条")
     return result
 
 
