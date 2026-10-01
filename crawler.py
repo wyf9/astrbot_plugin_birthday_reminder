@@ -11,10 +11,20 @@ from astrbot.api import logger
 
 from .models import ParsedEntry
 
+_NEWLINE_VARIANTS = re.compile(
+    r"\r\n?|[\u2028\u2029]|&newline;|&#(?:10|13);|&#x0*(?:a|d);|<br\s*/?>",
+    re.IGNORECASE,
+)
+
 
 def _truncate(text: str, limit: int = 500) -> str:
-    text = text.replace("\n", "\\n")
+    text = text.replace("\r", "\\r").replace("\n", "\\n")
     return text if len(text) <= limit else text[:limit] + f"...(共 {len(text)} 字)"
+
+
+def _normalize_newlines(text: str) -> str:
+    """统一协议端可能返回的换行表示。"""
+    return _NEWLINE_VARIANTS.sub("\n", text)
 
 
 def parse_announcement(
@@ -25,11 +35,19 @@ def parse_announcement(
     Returns:
         (entries, errors)：成功解析的条目与错误信息列表。
     """
-    logger.debug(f"[birthday] 解析公告：parse_mode={parse_mode!r} 原文={_truncate(text)!r}")
+    normalized_text = _normalize_newlines(text)
+    if normalized_text != text:
+        logger.debug(
+            f"[birthday] 公告换行已规范化：原文={_truncate(text)!r} "
+            f"规范化后={_truncate(normalized_text)!r}"
+        )
+    logger.debug(
+        f"[birthday] 解析公告：parse_mode={parse_mode!r} 原文={_truncate(normalized_text)!r}"
+    )
     if parse_mode == "regex":
-        entries, errors = _parse_regex(text, regex)
+        entries, errors = _parse_regex(normalized_text, regex)
     else:
-        entries, errors = _parse_csv(text)
+        entries, errors = _parse_csv(normalized_text)
     logger.debug(
         f"[birthday] 解析结果：命中 {len(entries)} 条，错误 {len(errors)} 条 -> "
         f"entries={[(e.uin, e.nick, e.year, e.month, e.day) for e in entries]} errors={errors}"
@@ -45,34 +63,46 @@ def _to_int(value: str | None) -> int:
 
 
 def _parse_csv(text: str) -> tuple[list[ParsedEntry], list[str]]:
+    """逐行解析 CSV，使公告中的说明文字或坏行不影响其他生日记录。"""
     entries: list[ParsedEntry] = []
     errors: list[str] = []
-    reader = csv.reader(io.StringIO(text))
-    for lineno, row in enumerate(reader, start=1):
-        # 去除空白单元格与整行空白
-        cells = [c.strip() for c in row]
-        if not any(cells):
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        if not line.strip():
+            logger.debug(f"[birthday] CSV 第 {lineno} 行为空，跳过")
             continue
-        # 跳过表头（首列不是纯数字 QQ 号）
+        try:
+            row = next(csv.reader(io.StringIO(line), strict=True))
+        except csv.Error as e:
+            errors.append(f"第 {lineno} 行 CSV 格式错误: {line.strip()}")
+            logger.debug(f"[birthday] CSV 第 {lineno} 行格式错误: {e}; 原文={line!r}")
+            continue
+        cells = [c.strip() for c in row]
         if not cells[0].isdigit():
+            logger.debug(f"[birthday] CSV 第 {lineno} 行首列不是 QQ 号，跳过: {cells!r}")
             continue
         if len(cells) < 5:
             errors.append(f"第 {lineno} 行字段不足(需要 5 列): {','.join(cells)}")
+            logger.debug(f"[birthday] CSV 第 {lineno} 行字段不足: {cells!r}")
             continue
         uin, nick, year_s, month_s, day_s = cells[0], cells[1], cells[2], cells[3], cells[4]
         month, day = _to_int(month_s), _to_int(day_s)
         if not (1 <= month <= 12 and 1 <= day <= 31):
             errors.append(f"第 {lineno} 行月份/日期非法: {','.join(cells)}")
+            logger.debug(f"[birthday] CSV 第 {lineno} 行月份/日期非法: {cells!r}")
             continue
-        entries.append(
-            ParsedEntry(
-                uin=uin,
-                nick=nick or uin,
-                year=_to_int(year_s),
-                month=month,
-                day=day,
-                raw=",".join(cells),
-            )
+        entry = ParsedEntry(
+            uin=uin,
+            nick=nick or uin,
+            year=_to_int(year_s),
+            month=month,
+            day=day,
+            raw=",".join(cells),
+        )
+        entries.append(entry)
+        logger.debug(
+            f"[birthday] CSV 第 {lineno} 行匹配成功: "
+            f"uin={entry.uin!r} nick={entry.nick!r} year={entry.year} "
+            f"month={entry.month} day={entry.day} raw={entry.raw!r}"
         )
     return entries, errors
 
@@ -89,22 +119,27 @@ def _parse_regex(text: str, regex: str) -> tuple[list[ParsedEntry], list[str]]:
         groups = match.groupdict()
         uin = (groups.get("uin") or "").strip()
         if not uin.isdigit():
+            logger.debug(f"[birthday] 正则匹配 QQ 号非法，跳过: {match.group(0)!r}")
             continue
         month = _to_int(groups.get("month"))
         day = _to_int(groups.get("day"))
         if not (1 <= month <= 12 and 1 <= day <= 31):
             errors.append(f"匹配项月份/日期非法: {match.group(0)!r}")
+            logger.debug(f"[birthday] 正则匹配月份/日期非法: {match.group(0)!r}")
             continue
         nick = (groups.get("nick") or "").strip() or uin
-        entries.append(
-            ParsedEntry(
-                uin=uin,
-                nick=nick,
-                year=_to_int(groups.get("year")),
-                month=month,
-                day=day,
-                raw=match.group(0),
-            )
+        entry = ParsedEntry(
+            uin=uin,
+            nick=nick,
+            year=_to_int(groups.get("year")),
+            month=month,
+            day=day,
+            raw=match.group(0),
+        )
+        entries.append(entry)
+        logger.debug(
+            f"[birthday] 正则匹配成功: uin={entry.uin!r} nick={entry.nick!r} "
+            f"year={entry.year} month={entry.month} day={entry.day} raw={entry.raw!r}"
         )
     return entries, errors
 
