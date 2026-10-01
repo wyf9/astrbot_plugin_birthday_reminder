@@ -244,7 +244,7 @@ class BirthdayReminder(Star):
                 delta = (r.next_birthday(today, feb29_mode) - today).days
                 when = "今天！🎉" if delta == 0 else f"还有 {delta} 天"
                 age = r.compute_age()
-                age_s = f"，{age} 岁" if age is not None else ""
+                age_s = f" {age + 1} 岁" if age is not None else ""
                 lines.append(f"{i}. {r.nick}({r.uin}) {r.date_str()} - {when}{age_s}")
         yield event.plain_result("\n".join(lines))
 
