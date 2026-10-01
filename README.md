@@ -23,7 +23,7 @@
 | `/birthday add <uin> <nick> <year> <month> <day>` | 手动添加生日，例：`/birthday add 2191161566 wyf9 2010 1 1` |
 | `/birthday del <uin 或 nick>` | 删除生日（精准匹配，先匹配 uin 再匹配 nick） |
 | `/birthday list [all]` | 查看即将过生日的人；默认本群，加 `all` 查看全部 |
-| `/birthday crawl` | 手动触发从群公告抓取 |
+| `/birthday crawl [force/--force]` | 手动触发从群公告抓取；添加 `force` 或 `--force` 会重新处理已抓取过的公告 |
 | `/birthday trigger` | 手动触发一次生日检测 |
 | `/birthday test <uin> <nick> <year> <month> <day>` | 测试生日提醒效果（参数同 add） |
 

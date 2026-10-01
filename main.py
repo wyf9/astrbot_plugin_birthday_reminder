@@ -250,10 +250,11 @@ class BirthdayReminder(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @birthday.command("crawl")
-    async def birthday_crawl(self, event: AstrMessageEvent):
-        """从群公告抓取生日信息：/birthday crawl"""
+    async def birthday_crawl(self, event: AstrMessageEvent, force: str = ""):
+        """从群公告抓取生日信息：/birthday crawl [force|--force]"""
+        force_crawl = force.strip().lower() in {"force", "--force"}
         yield event.plain_result("⏳ 开始抓取群公告……")
-        added, skipped, groups = await self._crawl_all_groups()
+        added, skipped, groups = await self._crawl_all_groups(force=force_crawl)
         yield event.plain_result(
             f"✅ 抓取完成：处理 {groups} 个群，新增 {added} 条，跳过/冲突 {skipped} 条。\n"
             f"如有冲突详情，可通过 /birthday list 查看（显示在列表上方）。"
@@ -331,14 +332,14 @@ class BirthdayReminder(Star):
             return records
         return [r for r in records if r.uin in members]
 
-    async def _crawl_all_groups(self) -> tuple[int, int, int]:
+    async def _crawl_all_groups(self, force: bool = False) -> tuple[int, int, int]:
         """抓取所有白名单群公告。返回 (新增, 跳过, 处理群数)。"""
         crawl = self._crawl_cfg()
         whitelist = crawl["group_whitelist"]
         logger.debug(
             f"[birthday] 开始抓取：group_whitelist={whitelist} "
             f"trigger_word={crawl['trigger_word']!r} parse_mode={crawl['parse_mode']!r} "
-            f"trigger_mode={crawl['trigger_mode']!r}"
+            f"trigger_mode={crawl['trigger_mode']!r} force={force}"
         )
         if not whitelist:
             logger.debug("[birthday] group_whitelist 为空，跳过抓取")
@@ -358,7 +359,7 @@ class BirthdayReminder(Star):
         global_conflicts: list[str] = []
         for gid in whitelist:
             added, skipped, conflicts = await self._crawl_group(
-                client, platform_id, gid, records, mode, crawl
+                client, platform_id, gid, records, mode, crawl, force=force
             )
             total_added += added
             total_skipped += skipped
@@ -379,6 +380,7 @@ class BirthdayReminder(Star):
         records: list[BirthdayRecord],
         mode: str,
         crawl: dict[str, Any],
+        force: bool = False,
     ) -> tuple[int, int, list[str]]:
         """抓取单个群。原地更新 records。返回 (新增, 跳过, 冲突信息)。"""
         logger.debug(f"[birthday] === 抓取群 {group_id} 开始 ===")
@@ -394,9 +396,11 @@ class BirthdayReminder(Star):
 
         for notice in notices:
             nid = notice["notice_id"]
-            if nid in processed:
+            if nid in processed and not force:
                 logger.debug(f"[birthday] 群 {group_id} 公告 {nid} 已处理过，跳过")
                 continue
+            if nid in processed:
+                logger.debug(f"[birthday] 群 {group_id} 公告 {nid} 已处理过，强制重新处理")
             new_ids.append(nid)
             text = notice["text"]
             if trigger_word and trigger_word not in text:
